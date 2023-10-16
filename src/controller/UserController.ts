@@ -11,7 +11,11 @@ export class UserController {
   private userRepository = AppDataSource.getRepository(User);
 
   async getUsers(request: Request, response: Response, next: NextFunction) {
-    return await this.userRepository.find();
+    try {
+      return await this.userRepository.find();
+    } catch (error) {
+      return response.status(500).json({ message: "Something went wrong." });
+    }
   }
 
   async signup(req: Request, res: Response, next: NextFunction) {
@@ -74,36 +78,9 @@ export class UserController {
         { expiresIn: "30d" },
       );
 
-      res.status(200).json({ existingUser, token });
+      res.status(200).json({ token });
     } catch (error) {
       return res.status(500).json({ message: "Something went wrong." });
     }
-  }
-
-  async one(request: Request, response: Response, next: NextFunction) {
-    const id = parseInt(request.params.id);
-
-    const user = await this.userRepository.findOne({
-      where: { id },
-    });
-
-    if (!user) {
-      return "unregistered user";
-    }
-    return user;
-  }
-
-  async remove(request: Request, response: Response, next: NextFunction) {
-    const id = parseInt(request.params.id);
-
-    let userToRemove = await this.userRepository.findOneBy({ id });
-
-    if (!userToRemove) {
-      return "this user not exist";
-    }
-
-    await this.userRepository.remove(userToRemove);
-
-    return "user has been removed";
   }
 }

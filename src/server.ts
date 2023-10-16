@@ -15,7 +15,6 @@ AppDataSource.initialize()
   .then(async () => {
     // create express app
     const app = express();
-    // app.use(express.json());
 
     app.use(cors());
 
@@ -32,18 +31,44 @@ AppDataSource.initialize()
       app[route.method](
         route.route,
         async (req: Request, res: Response, next: NextFunction) => {
-          try {
-            const controller = new (route.controller as new () => any)();
-            const result = await controller[route.action](req, res, next);
+          const middlewares = route.middleware || []; // Get the middleware(s) for this route
 
-            if (result !== null && result !== undefined) {
-              res.json(result);
+          // Apply each middleware sequentially
+          const applyMiddleware = (index: number) => {
+            if (index < middlewares.length) {
+              middlewares[index](req, res, (err) => {
+                if (err) {
+                  next(err); // Pass any errors to the error handler
+                }
+                applyMiddleware(index + 1); // Apply the next middleware
+              });
             } else {
-              res.status(204).send(); // Respond with a 204 No Content status
+              continueRouteHandling();
             }
-          } catch (error) {
-            next(error); // Pass the error to the next error handler
-          }
+          };
+
+          // Continue with route handling after middleware(s)
+          const continueRouteHandling = () => {
+            const result = new (route.controller as any)()[route.action](
+              req,
+              res,
+              next,
+            );
+            if (result instanceof Promise) {
+              result
+                .then((result) =>
+                  result !== null && result !== undefined
+                    ? res.send(result)
+                    : undefined,
+                )
+                .catch((error) => next(error));
+            } else if (result !== null && result !== undefined) {
+              res.json(result);
+            }
+          };
+
+          // Start applying middleware(s)
+          applyMiddleware(0);
         },
       );
     });
