@@ -6,6 +6,8 @@ import { Request, Response, NextFunction } from "express";
 import { AppDataSource } from "./data-source";
 import { Routes } from "./routes";
 import { errorHandler } from "./middlewares/error";
+import helmet from "helmet";
+import * as morgan from "morgan";
 
 dotenv.config();
 
@@ -15,10 +17,12 @@ AppDataSource.initialize()
   .then(async () => {
     // create express app
     const app = express();
+    app.use(express.json());
 
     app.use(cors());
 
     // Middlewares
+    app.use(morgan("dev"));
     app.use(bodyParser.json());
     app.use(
       bodyParser.urlencoded({
@@ -49,18 +53,18 @@ AppDataSource.initialize()
 
           // Continue with route handling after middleware(s)
           const continueRouteHandling = () => {
-            const result = new (route.controller as any)()[route.action](
-              req,
-              res,
-              next,
-            );
+            const controllerInstance = new (route.controller as any)();
+            const result = controllerInstance[route.action](req, res, next);
+
             if (result instanceof Promise) {
               result
-                .then((result) =>
-                  result !== null && result !== undefined
-                    ? res.send(result)
-                    : undefined,
-                )
+                .then((response) => {
+                  if (response !== null && response !== undefined) {
+                    res.send(response);
+                  } else {
+                    res.status(500);
+                  }
+                })
                 .catch((error) => next(error));
             } else if (result !== null && result !== undefined) {
               res.json(result);
@@ -80,6 +84,8 @@ AppDataSource.initialize()
 
     // start express server
     app.listen(port);
+    app.use(helmet());
+    app.use(helmet.xssFilter());
     console.log(`App started on port ${port}`);
   })
   .catch((error) => console.log(error));
